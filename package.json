@@ -7,7 +7,8 @@
     "start": "node server.js",
     "electron": "electron .",
     "server": "node server.js",
-    "dev": "concurrently \"npm run server\" \"wait-on http://localhost:3000 && npm run electron\""
+    "dev": "concurrently \"npm run server\" \"wait-on http://localhost:3000 && npm run electron\"",
+    "postinstall": "electron-rebuild || echo 'Skip rebuild if not needed'"
   },
   "dependencies": {
     "better-sqlite3": "^12.9.0",
