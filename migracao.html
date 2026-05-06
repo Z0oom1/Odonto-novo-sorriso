@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Migração de Dados</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
+    #log { margin-top: 20px; background: #f4f4f4; padding: 15px; border-radius: 5px; white-space: pre-wrap; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h2>Ferramenta de Migração do Novo Sorriso</h2>
+  <p>Esta ferramenta copia os dados do banco local (IndexedDB) para o novo Servidor Central.</p>
+  <p><strong>ATENÇÃO:</strong> Certifique-se de que o servidor (node server.js) está rodando!</p>
+  <button onclick="startMigration()">Iniciar Migração</button>
+  <div id="log">Aguardando...</div>
+
+  <script>
+    const API_URL = "http://192.168.1.156:3000/api";
+
+    function log(msg) {
+      document.getElementById("log").innerText += msg + "\n";
+    }
+
+    async function sendData(storeName, data) {
+      try {
+        const res = await fetch(`${API_URL}/bulk-save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ store: storeName, items: data })
+        });
+        if (res.ok) {
+          log(`✅ Sucesso: ${data.length} itens salvos em '${storeName}'.`);
+        } else {
+          log(`❌ Erro ao salvar '${storeName}'.`);
+        }
+      } catch (err) {
+        log(`❌ Erro de conexão ao tentar salvar '${storeName}': ${err.message}`);
+      }
+    }
+
+    function startMigration() {
+      log("Iniciando leitura do banco de dados local...");
+      const request = indexedDB.open("NovoSorrisoDB");
+
+      request.onerror = (e) => log("❌ Erro ao abrir IndexedDB: " + e.target.error);
+      
+      request.onsuccess = (e) => {
+        const db = e.target.result;
+        const stores = ["patients", "appointments", "notifications"];
+        
+        stores.forEach(storeName => {
+          if (!db.objectStoreNames.contains(storeName)) {
+            log(`⚠️ Tabela '${storeName}' não existe no banco local.`);
+            return;
+          }
+          
+          const tx = db.transaction(storeName, "readonly");
+          const store = tx.objectStore(storeName);
+          const req = store.getAll();
+          
+          req.onsuccess = async () => {
+            if (req.result && req.result.length > 0) {
+              log(`Encontrados ${req.result.length} itens em '${storeName}'. Enviando para o servidor...`);
+              await sendData(storeName, req.result);
+            } else {
+              log(`ℹ️ Tabela '${storeName}' está vazia.`);
+            }
+          };
+        });
+      };
+    }
+  </script>
+</body>
+</html>

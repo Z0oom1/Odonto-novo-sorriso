@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NOVO SORRISO — Sistema Interno</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="style.css?v=1.1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>\n    <script src="api.js"></script>
+</head>
+
+<body>
+
+  <!-- ===== LOADING SCREEN ===== -->
+  <div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="loading-logo-box">
+      <img src="logo.png" alt="Logo">
+    </div>
+    <p class="loading-text"><span class="text-primary">NOVO</span> <span class="text-theme">SORRISO</span></p>
+    <p class="loading-subtitle-text">Carregando sistema...</p>
+    <div class="loading-bar-wrap">
+      <div id="loadingBar" class="loading-bar"></div>
+    </div>
+  </div>
+
+  <audio id="startupSound" src="https://www.myinstants.com/media/sounds/mac-startup-sound.mp3"></audio>
+
+  <!-- ===== LOGIN SCREEN ===== -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-bg">
+      <div class="login-blob blob1"></div>
+      <div class="login-blob blob2"></div>
+      <div class="login-blob blob3"></div>
+    </div>
+    <div class="login-card glass">
+      <div class="login-logo">
+        <div class="logo-icon">
+          <img src="logo.png" alt="Logo">
+        </div>
+        <div>
+          <h1 class="login-title"><span class="brand-novo">NOVO</span> <span class="brand-sorriso">SORRISO</span></h1>
+          <p class="login-subtitle">Sistema de Gestão Odontológica</p>
+        </div>
+      </div>
+      <form id="loginForm" class="login-form" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label>Usuário</label>
+          <div class="input-icon-wrap">
+            <i class="fa-solid fa-user"></i>
+            <input type="text" id="loginUser" class="form-input" placeholder="Digite seu usuário" required
+              autocomplete="username" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Senha</label>
+          <div class="input-icon-wrap">
+            <i class="fa-solid fa-lock"></i>
+            <input type="password" id="loginPass" class="form-input" placeholder="Digite sua senha" required
+              autocomplete="current-password" />
+            <button type="button" class="toggle-pass" onclick="togglePass()"><i class="fa-solid fa-eye"
+                id="eyeIcon"></i></button>
+          </div>
+        </div>
+        <div id="loginError" class="login-error hidden">Usuário ou senha incorretos.</div>
+        <button type="submit" class="btn-primary btn-full" id="loginBtn">
+          <span>Entrar</span><i class="fa-solid fa-arrow-right-to-bracket"></i>
+        </button>
+      </form>
+      <p class="login-hint">Admin padrão: <strong>admin</strong> / <strong>admin123</strong></p>
+    </div>
+  </div>
+
+  <!-- ===== MAIN APP ===== -->
+  <div id="mainApp" class="app-layout hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <div class="logo-icon-sm">
+            <img src="logo.png" alt="Logo">
+          </div>
+          <span class="sidebar-brand"><span class="brand-novo">NOVO</span> <span
+              class="brand-sorriso">SORRISO</span></span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" onclick="navigate('dashboard')" id="nav-dashboard">
+          <i class="fa-solid fa-chart-pie"></i><span>Dashboard</span>
+        </a>
+        <a href="#" class="nav-item" onclick="navigate('patients')" id="nav-patients">
+          <i class="fa-solid fa-hospital-user"></i><span>Pacientes</span>
+          <span class="nav-badge" id="badge-patients"></span>
+        </a>
+        <a href="#" class="nav-item" onclick="navigate('appointments')" id="nav-appointments">
+          <i class="fa-solid fa-notes-medical"></i><span>Agendamentos</span>
+          <span class="nav-badge" id="badge-appointments"></span>
+        </a>
+        <a href="#" class="nav-item" onclick="navigate('calendar')" id="nav-calendar">
+          <i class="fa-solid fa-calendar-alt"></i><span>Calendário</span>
+        </a>
+        <a href="#" class="nav-item" onclick="navigate('availability')" id="nav-availability">
+          <i class="fa-solid fa-clock"></i><span>Disponibilidade</span>
+        </a>
+        <a href="#" class="nav-item" onclick="navigate('reports')" id="nav-reports">
+          <i class="fa-solid fa-file-invoice-dollar"></i><span>Relatórios</span>
+        </a>
+        <a href="#" class="nav-item" onclick="navigate('settings')" id="nav-settings">
+          <i class="fa-solid fa-sliders"></i><span>Configurações</span>
+        </a>
+        <div class="nav-divider"></div>
+        <a href="../web/index.html" target="_blank" class="nav-item portal-link" style="background: rgba(30, 58, 138, 0.1); color: #1e3a8a;">
+          <i class="fa-solid fa-rocket"></i><span>Portal do Cliente</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-user">
+        <div class="user-avatar" id="sidebarAvatar">A</div>
+        <div class="user-info">
+          <span class="user-name" id="sidebarUserName">Admin</span>
+          <span class="user-role" id="sidebarUserRole">Administrador</span>
+        </div>
+        <button class="btn-logout" onclick="handleLogout()" title="Sair"><i
+            class="fa-solid fa-right-from-bracket"></i></button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <!-- TOP BAR -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+          <div class="page-title" id="pageTitle">Dashboard</div>
+        </div>
+        <div class="topbar-right">
+          <button class="theme-toggle" onclick="toggleTheme()" title="Alternar Tema">
+            <i class="fa-solid fa-moon" id="themeIcon"></i>
+          </button>
+          <div class="notification-bell" onclick="toggleNotifPanel()">
+            <i class="fa-solid fa-bell"></i>
+            <span class="notif-count" id="notifCount" style="display:none">0</span>
+          </div>
+          <div class="topbar-date" id="topbarDate"></div>
+        </div>
+      </header>
+
+      <!-- NOTIFICATION PANEL -->
+      <div class="notif-panel glass" id="notifPanel" style="display:none">
+        <div class="notif-panel-header">
+          <h3>Notificações</h3>
+          <button onclick="markAllRead()" class="btn-link">Marcar todas como lidas</button>
+        </div>
+        <div id="notifList" class="notif-list"></div>
+      </div>
+
+      <!-- PAGES -->
+      <div class="page-content">
+
+        <!-- DASHBOARD -->
+        <div id="page-dashboard" class="page active">
+          <div class="stats-grid">
+            <div class="stat-card glass" id="stat-today">
+              <div class="stat-icon" style="background:linear-gradient(135deg,#667eea,#764ba2)">
+                <i class="fa-solid fa-calendar-day"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-value" id="statToday">0</div>
+                <div class="stat-label">Consultas Hoje</div>
+              </div>
+            </div>
+            <div class="stat-card glass" id="stat-month">
+              <div class="stat-icon" style="background:linear-gradient(135deg,#f093fb,#f5576c)">
+                <i class="fa-solid fa-chart-line"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-value" id="statMonth">0</div>
+                <div class="stat-label">Consultas no Mês</div>
+              </div>
+            </div>
+            <div class="stat-card glass" id="stat-patients">
+              <div class="stat-icon" style="background:linear-gradient(135deg,#4facfe,#00f2fe)">
+                <i class="fa-solid fa-users"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-value" id="statPatients">0</div>
+                <div class="stat-label">Pacientes Cadastrados</div>
+              </div>
+            </div>
+            <div class="stat-card glass" id="stat-pending">
+              <div class="stat-icon" style="background:linear-gradient(135deg,#fa709a,#fee140)">
+                <i class="fa-solid fa-clock"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-value" id="statPending">0</div>
+                <div class="stat-label">Aguardando Aprovação</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-grid">
+            <div class="dashboard-card glass">
+              <div class="card-header">
+                <h2><i class="fa-solid fa-calendar-check"></i> Consultas de Hoje</h2>
+                <button class="btn-sm btn-primary" onclick="navigate('appointments')">Ver Todas</button>
+              </div>
+              <div id="todayAppointments" class="appointment-list-mini"></div>
+            </div>
+
+            <div class="dashboard-card glass">
+              <div class="card-header">
+                <h2><i class="fa-solid fa-bell"></i> Atividade Recente</h2>
+                <button class="btn-sm btn-ghost" onclick="markAllRead()">Limpar</button>
+              </div>
+              <div id="recentActivity" class="activity-list"></div>
+            </div>
+          </div>
+
+          <!-- Pending Reschedule Requests -->
+          <div class="dashboard-card glass" id="pendingSection" style="margin-top:1.5rem">
+            <div class="card-header">
+              <h2><i class="fa-solid fa-arrows-rotate"></i> Solicitações de Reagendamento</h2>
+            </div>
+            <div id="pendingReschedules" class="reschedule-list"></div>
+          </div>
+        </div>
+
+        <!-- PATIENTS PAGE -->
+        <div id="page-patients" class="page">
+          <div class="page-actions">
+            <div class="search-bar">
+              <i class="fa-solid fa-search"></i>
+              <input type="text" id="patientSearch" placeholder="Buscar por nome, CPF ou telefone..."
+                oninput="filterPatients()" />
+            </div>
+            <button class="btn-primary" onclick="openPatientModal()">
+              <i class="fa-solid fa-user-plus"></i> Novo Paciente
+            </button>
+          </div>
+          <div class="table-card glass">
+            <table class="data-table" id="patientsTable">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>CPF</th>
+                  <th>Telefone</th>
+                  <th>Email</th>
+                  <th>Sexo</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="patientsBody"></tbody>
+            </table>
+            <div id="noPatientsMsg" class="empty-state hidden">
+              <i class="fa-solid fa-users-slash"></i>
+              <p>Nenhum paciente cadastrado ainda.</p>
+              <button class="btn-primary" onclick="openPatientModal()">Cadastrar Paciente</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- APPOINTMENTS PAGE -->
+        <div id="page-appointments" class="page">
+          <div class="page-actions">
+            <div class="filter-group">
+              <select id="apptStatusFilter" onchange="filterAppointments()" class="form-select">
+                <option value="">Todos os Status</option>
+                <option value="AGENDADO">Agendado</option>
+                <option value="CONFIRMADO">Confirmado</option>
+                <option value="CANCELADO">Cancelado</option>
+                <option value="REAGENDAMENTO_SOLICITADO">Reagendamento Solicitado</option>
+              </select>
+              <input type="date" id="apptDateFilter" onchange="filterAppointments()" class="form-input" />
+            </div>
+            <button class="btn-primary" onclick="openAppointmentModal()">
+              <i class="fa-solid fa-calendar-plus"></i> Novo Agendamento
+            </button>
+          </div>
+          <div class="table-card glass">
+            <table class="data-table" id="appointmentsTable">
+              <thead>
+                <tr>
+                  <th>Paciente</th>
+                  <th>Data</th>
+                  <th>Hora</th>
+                  <th>Status</th>
+                  <th>Observações</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="appointmentsBody"></tbody>
+            </table>
+            <div id="noApptsMsg" class="empty-state hidden">
+              <i class="fa-solid fa-calendar-xmark"></i>
+              <p>Nenhum agendamento encontrado.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- CALENDAR PAGE -->
+        <div id="page-calendar" class="page">
+          <div class="calendar-controls glass">
+            <button class="btn-ghost" onclick="calPrev()"><i class="fa-solid fa-chevron-left"></i></button>
+            <div class="cal-nav-center">
+              <h2 id="calTitle"></h2>
+              <div class="cal-view-btns">
+                <button class="btn-sm btn-ghost active" onclick="setCalView('month',this)">Mês</button>
+                <button class="btn-sm btn-ghost" onclick="setCalView('week',this)">Semana</button>
+                <button class="btn-sm btn-ghost" onclick="setCalView('day',this)">Dia</button>
+              </div>
+            </div>
+            <button class="btn-ghost" onclick="calNext()"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+          <div id="calendarContainer" class="calendar-container glass"></div>
+        </div>
+
+        <!-- AVAILABILITY PAGE -->
+        <div id="page-availability" class="page">
+          <div class="page-actions">
+            <div class="page-title">Gestão de Disponibilidade</div>
+            <p class="text-muted">Selecione os dias que estarão abertos para agendamento online pelos clientes.</p>
+          </div>
+
+          <div class="availability-grid glass p-2">
+            <div class="calendar-mini-header">
+              <button class="btn-sm btn-ghost" onclick="changeAvailMonth(-1)"><i
+                  class="fa-solid fa-chevron-left"></i></button>
+              <h3 id="availMonthTitle">Maio 2026</h3>
+              <button class="btn-sm btn-ghost" onclick="changeAvailMonth(1)"><i
+                  class="fa-solid fa-chevron-right"></i></button>
+            </div>
+            <div class="calendar-grid" id="availCalendarGrid"></div>
+          </div>
+
+          <div class="mt-2 card glass p-2" id="daySettings" style="display:none">
+            <h4 id="selectedDayLabel">Configurações para o dia 20/05/2026</h4>
+            <div class="flex gap-1 mt-1">
+              <label class="toggle-switch">
+                <input type="checkbox" id="dayOpenToggle" onchange="toggleDayAvailability()">
+                <span class="slider"></span>
+              </label>
+              <span>Disponível para Agendamento Online</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- REPORTS PAGE -->
+        <div id="page-reports" class="page">
+          <div class="reports-grid">
+            <div class="glass report-card">
+              <h3><i class="fa-solid fa-calendar-day"></i> Consultas por Dia</h3>
+              <canvas id="chartDay" width="400" height="200"></canvas>
+            </div>
+            <div class="glass report-card">
+              <h3><i class="fa-solid fa-calendar-week"></i> Consultas por Mês</h3>
+              <canvas id="chartMonth" width="400" height="200"></canvas>
+            </div>
+            <div class="glass report-card full-width">
+              <h3><i class="fa-solid fa-circle-info"></i> Resumo Geral</h3>
+              <div id="reportSummary" class="report-summary-grid"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SETTINGS PAGE -->
+        <div id="page-settings" class="page">
+          <div class="settings-grid">
+
+            <!-- Working Hours -->
+            <div class="glass settings-card">
+              <h3><i class="fa-solid fa-clock"></i> Horários de Funcionamento</h3>
+              <div class="hours-table">
+                <div class="hours-row header"><span>Dia</span><span>Início</span><span>Fim</span><span>Ativo</span>
+                </div>
+                <div id="workingHoursEditor"></div>
+              </div>
+              <button class="btn-primary mt-1" onclick="saveWorkingHours()">
+                <i class="fa-solid fa-save"></i> Salvar Horários
+              </button>
+            </div>
+
+            <!-- WhatsApp -->
+            <div class="glass settings-card">
+              <h3><i class="fa-brands fa-whatsapp"></i> Integração WhatsApp</h3>
+              <div class="form-group">
+                <label>Phone Number ID (Meta)</label>
+                <input type="text" id="waPhoneId" class="form-input" placeholder="Ex: 123456789" />
+              </div>
+              <div class="form-group">
+                <label>Access Token</label>
+                <input type="password" id="waToken" class="form-input" placeholder="Token da API do Meta" />
+              </div>
+              <div class="form-group">
+                <label>URL do Site do Cliente</label>
+                <input type="text" id="webUrl" class="form-input" placeholder="https://novosorriso.vercel.app" />
+              </div>
+              <button class="btn-primary mt-1" onclick="saveWhatsAppConfig()">
+                <i class="fa-solid fa-save"></i> Salvar Configuração
+              </button>
+              <button class="btn-ghost mt-1" onclick="testWhatsApp()">
+                <i class="fa-solid fa-paper-plane"></i> Testar Envio
+              </button>
+            </div>
+
+            <!-- Users -->
+            <div class="glass settings-card" id="usersSettingCard">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-user-shield"></i> Usuários</h3>
+                <button class="btn-sm btn-primary" onclick="openUserModal()">
+                  <i class="fa-solid fa-plus"></i> Novo
+                </button>
+              </div>
+              <div id="usersList" class="users-list"></div>
+            </div>
+
+            <!-- Backup -->
+            <div class="glass settings-card">
+              <h3><i class="fa-solid fa-database"></i> Backup de Dados</h3>
+              <p class="text-muted">Exporte todos os dados do sistema para um arquivo JSON.</p>
+              <div class="flex gap-1 mt-1">
+                <button class="btn-primary" onclick="exportBackup()">
+                  <i class="fa-solid fa-download"></i> Exportar Backup
+                </button>
+                <button class="btn-ghost" onclick="document.getElementById('importFile').click()">
+                  <i class="fa-solid fa-upload"></i> Importar
+                </button>
+                <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackup(event)" />
+              </div>
+              <div class="form-group mt-1">
+                <label>Backup Automático</label>
+                <div class="toggle-row">
+                  <span>Exportar automaticamente ao sair</span>
+                  <label class="toggle">
+                    <input type="checkbox" id="autoBackup" onchange="saveAutoBackup()" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div><!-- end page-content -->
+    </main>
+  </div>
+  <div id="originIndicator"></div>
+
+  <!-- ===== MODALS ===== -->
+
+  <!-- Availability Modal -->
+  <div id="availabilityModal" class="modal-overlay hidden">
+    <div class="modal glass animate-up" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2 id="availModalTitle">Disponibilidade</h2>
+        <button class="btn-icon" onclick="closeAvailModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted mb-2">Clique nos horários para alternar entre disponível e indisponível.</p>
+        <div id="availTimeSlots"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" onclick="closeAvailModal()">Pronto</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Patient Modal -->
+  <div id="patientModal" class="modal-overlay hidden">
+    <div class="modal glass" style="max-width:700px">
+      <div class="modal-header">
+        <h2 id="patientModalTitle"><i class="fa-solid fa-user-plus"></i> Novo Paciente</h2>
+        <button class="modal-close" onclick="closePatientModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="patientForm" onsubmit="savePatient(event)" class="modal-body">
+        <div class="form-grid">
+          <div class="form-group span-2">
+            <label>Nome Completo *</label>
+            <input type="text" id="pName" class="form-input" placeholder="Nome completo do paciente" required />
+          </div>
+          <div class="form-group">
+            <label>CPF *</label>
+            <input type="text" id="pCpf" class="form-input" placeholder="000.000.000-00" maxlength="14"
+              oninput="formatCPF(this)" required />
+          </div>
+          <div class="form-group">
+            <label>Data de Nascimento</label>
+            <input type="date" id="pBirth" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label>Telefone / WhatsApp *</label>
+            <input type="text" id="pPhone" class="form-input" placeholder="(00) 00000-0000" maxlength="15"
+              oninput="maskPhone(this)" required />
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="pEmail" class="form-input" placeholder="email@exemplo.com" />
+          </div>
+          <div class="form-group">
+            <label>Sexo</label>
+            <select id="pGender" class="form-select">
+              <option value="">Selecione</option>
+              <option value="M">Masculino</option>
+              <option value="F">Feminino</option>
+              <option value="O">Outro</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>CEP</label>
+            <input type="text" id="pCep" class="form-input" placeholder="00000-000" maxlength="9"
+              oninput="maskCep(this)" onblur="fetchCep()" />
+          </div>
+          <div class="form-group span-2">
+            <label>Endereço</label>
+            <input type="text" id="pAddress" class="form-input" placeholder="Rua, número, bairro, cidade" />
+          </div>
+          <div class="form-group span-2">
+            <label>Observações</label>
+            <textarea id="pNotes" class="form-input" rows="3"
+              placeholder="Alergias, condições especiais, observações..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-ghost" onclick="closePatientModal()">Cancelar</button>
+          <button type="submit" class="btn-primary"><i class="fa-solid fa-save"></i> Salvar Paciente</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Patient History Modal -->
+  <div id="historyModal" class="modal-overlay hidden">
+    <div class="modal glass" style="max-width:650px">
+      <div class="modal-header">
+        <h2 id="historyTitle"><i class="fa-solid fa-clock-rotate-left"></i> Histórico do Paciente</h2>
+        <button class="modal-close" onclick="closeModal('historyModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body" id="historyBody"></div>
+    </div>
+  </div>
+
+  <!-- Appointment Modal -->
+  <div id="appointmentModal" class="modal-overlay hidden">
+    <div class="modal glass" style="max-width:560px">
+      <div class="modal-header">
+        <h2 id="apptModalTitle"><i class="fa-solid fa-calendar-plus"></i> Novo Agendamento</h2>
+        <button class="modal-close" onclick="closeModal('appointmentModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="appointmentForm" onsubmit="saveAppointment(event)" class="modal-body">
+        <div class="form-group">
+          <label>Paciente *</label>
+          <div class="autocomplete-wrap">
+            <input type="text" id="apptPatientInput" class="form-input" placeholder="Buscar paciente..."
+              oninput="searchPatientAutocomplete()" required autocomplete="off" />
+            <input type="hidden" id="apptPatientId" />
+            <div id="patientDropdown" class="autocomplete-dropdown hidden"></div>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Data *</label>
+            <input type="date" id="apptDate" class="form-input" onchange="loadAvailableSlots()" required />
+          </div>
+          <div class="form-group">
+            <label>Horário *</label>
+            <select id="apptTime" class="form-select" required>
+              <option value="">Selecione a data primeiro</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="apptStatus" class="form-select">
+            <option value="AGENDADO">Agendado</option>
+            <option value="CONFIRMADO">Confirmado</option>
+            <option value="CANCELADO">Cancelado</option>
+            <option value="REALIZADA">Realizada (Finalizar)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Observações</label>
+          <textarea id="apptNotes" class="form-input" rows="2"
+            placeholder="Tipo de consulta, observações..."></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-ghost" onclick="closeModal('appointmentModal')">Cancelar</button>
+          <button type="submit" class="btn-primary"><i class="fa-solid fa-save"></i> Salvar Agendamento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Reschedule Approval Modal -->
+  <div id="rescheduleModal" class="modal-overlay hidden">
+    <div class="modal glass" style="max-width:520px">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-arrows-rotate"></i> Aprovar Reagendamento</h2>
+        <button class="modal-close" onclick="closeModal('rescheduleModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div id="rescheduleInfo" class="reschedule-info-box"></div>
+        <div class="form-group mt-1">
+          <label>Nova Data *</label>
+          <input type="date" id="newApptDate" class="form-input" onchange="loadRescheduleSlots()" />
+        </div>
+        <div class="form-group">
+          <label>Novo Horário *</label>
+          <select id="newApptTime" class="form-select">
+            <option value="">Selecione a data primeiro</option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-ghost" onclick="closeModal('rescheduleModal')">Cancelar</button>
+          <button class="btn-primary" onclick="approveReschedule()"><i class="fa-solid fa-check"></i> Aprovar e
+            Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Modal -->
+  <div id="userModal" class="modal-overlay hidden">
+    <div class="modal glass" style="max-width:420px">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-user-plus"></i> Novo Usuário</h2>
+        <button class="modal-close" onclick="closeModal('userModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="userForm" onsubmit="saveUser(event)" class="modal-body">
+        <div class="form-group">
+          <label>Nome</label>
+          <input type="text" id="uName" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label>Usuário (login)</label>
+          <input type="text" id="uUsername" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label>Senha</label>
+          <input type="password" id="uPass" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label>Perfil</label>
+          <select id="uRole" class="form-select">
+            <option value="FUNCIONARIO">Funcionário</option>
+            <option value="ADMIN">Administrador</option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-ghost" onclick="closeModal('userModal')">Cancelar</button>
+          <button type="submit" class="btn-primary">Criar Usuário</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Appointment Detail Modal -->
+  <div id="apptDetailModal" class="modal-overlay hidden">
+    <div class="modal glass" style="max-width:500px">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-circle-info"></i> Detalhes do Agendamento</h2>
+        <button class="modal-close" onclick="closeModal('apptDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body" id="apptDetailBody"></div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <!-- Day Preview Modal -->
+  <div id="dayPreviewModal" class="modal-overlay hidden">
+    <div class="modal glass" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2 id="previewDateTitle">Agendamentos</h2>
+        <button class="modal-close" onclick="closeModal('dayPreviewModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="dayPreviewBody" class="modal-body">
+        <!-- List of appointments for the day -->
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NOVO SORRISO — Detalhes da Consulta</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .portal-container { padding: 4rem 1rem; min-height: 80vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .portal-card { max-width: 500px; width: 100%; padding: 3rem; text-align: center; }
+    .appt-info-box { background: #f1f5f9; padding: 1.5rem; border-radius: 16px; margin: 2rem 0; text-align: left; }
+    .info-item { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+    .info-label { color: var(--text-muted); font-weight: 500; }
+    .info-value { font-weight: 700; color: var(--primary); }
+    .btn-outline-red { border: 2px solid #ef4444; color: #ef4444; background: none; padding: 0.75rem 2rem; border-radius: 100px; font-weight: 600; cursor: pointer; transition: all 0.2s; width: 100%; }
+    .btn-outline-red:hover { background: #ef4444; color: white; }
+    .btn-secondary { background: var(--secondary); color: white; border: none; padding: 0.75rem 2rem; border-radius: 100px; font-weight: 600; cursor: pointer; transition: all 0.2s; width: 100%; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+
+  <div class="portal-container">
+    <div class="logo mb-4" style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 500px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <i class="fa-solid fa-tooth"></i>
+        <span>NOVO SORRISO</span>
+      </div>
+      <button onclick="logout()" style="background: none; border: 1px solid #ef4444; color: #ef4444; padding: 0.5rem 1rem; border-radius: 10px; cursor: pointer; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 5px;">
+        <i class="fa-solid fa-right-from-bracket"></i> Sair
+      </button>
+    </div>
+
+    <div class="portal-card glass">
+      <h2 id="patientGreeting">Olá!</h2>
+      <p>Estes são os detalhes do seu agendamento:</p>
+
+      <div class="appt-info-box">
+        <div class="info-item">
+          <span class="info-label">Data:</span>
+          <span class="info-value" id="pDate">--/--/----</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Hora:</span>
+          <span class="info-value" id="pTime">--:--</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Status:</span>
+          <span class="info-value" id="pStatus">--</span>
+        </div>
+      </div>
+
+      <div id="actions">
+        <button class="btn-secondary" onclick="requestReschedule()">Solicitar Reagendamento</button>
+        <button class="btn-outline-red" onclick="cancelAppt()">Cancelar Consulta</button>
+      </div>
+
+      <div id="rescheduleForm" class="hidden" style="text-align: left; margin-top: 2rem;">
+        <h3 style="margin-bottom: 1rem;">Novo Horário</h3>
+        <input type="date" id="newDate" onchange="loadPortalTimes()" class="mb-1" style="margin-bottom: 1rem;" />
+        <div id="newTimes" class="time-slots"></div>
+        <div class="flex gap-1 mt-2">
+          <button class="btn-ghost" onclick="toggleReschedule()">Voltar</button>
+          <button class="btn-primary" onclick="submitReschedule()">Confirmar Pedido</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let db;
+    let currentAppt = null;
+    const urlParams = new URLSearchParams(window.location.search);
+    const apptId = parseInt(urlParams.get('id')) || 1; // Simulation
+
+    const dbRequest = indexedDB.open("NovoSorrisoDB", 1);
+    dbRequest.onsuccess = (e) => { 
+      db = e.target.result;
+      loadApptData();
+    };
+
+    function loadApptData() {
+      const tx = db.transaction("appointments", "readonly");
+      tx.objectStore("appointments").get(apptId).onsuccess = (e) => {
+        currentAppt = e.target.result;
+        if (currentAppt) {
+          document.getElementById('patientGreeting').innerText = `Olá, ${currentAppt.patientName}!`;
+          document.getElementById('pDate').innerText = currentAppt.date.split('-').reverse().join('/');
+          document.getElementById('pTime').innerText = currentAppt.time;
+          document.getElementById('pStatus').innerText = currentAppt.status;
+          
+          if (currentAppt.status === 'CANCELADO') {
+            document.getElementById('actions').innerHTML = '<p class="text-muted">Esta consulta foi cancelada.</p>';
+          }
+        }
+      };
+    }
+
+    function cancelAppt() {
+      if (!confirm("Tem certeza que deseja cancelar sua consulta?")) return;
+      const tx = db.transaction("appointments", "readwrite");
+      const store = tx.objectStore("appointments");
+      currentAppt.status = 'CANCELADO';
+      store.put(currentAppt);
+      tx.oncomplete = () => {
+        alert("Consulta cancelada com sucesso.");
+        location.reload();
+      };
+    }
+
+    function toggleReschedule() {
+      document.getElementById('actions').classList.toggle('hidden');
+      document.getElementById('rescheduleForm').classList.toggle('hidden');
+    }
+
+    function requestReschedule() { toggleReschedule(); }
+
+    function loadPortalTimes() {
+      const date = document.getElementById('newDate').value;
+      const container = document.getElementById('newTimes');
+      container.innerHTML = 'Carregando...';
+
+      const tx = db.transaction("appointments", "readonly");
+      tx.objectStore("appointments").getAll().onsuccess = (e) => {
+        const taken = e.target.result.filter(a => a.date === date && a.status !== 'CANCELADO').map(a => a.time);
+        container.innerHTML = "";
+        const slots = ["08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00"];
+        slots.forEach(s => {
+          const isDisabled = taken.includes(s);
+          const div = document.createElement('div');
+          div.className = `time-slot ${isDisabled ? 'disabled' : ''}`;
+          div.innerText = s;
+          div.onclick = () => {
+            if (!isDisabled) {
+              document.querySelectorAll('.time-slot').forEach(t => t.classList.remove('selected'));
+              div.classList.add('selected');
+              window.selectedNewTime = s;
+            }
+          };
+          container.appendChild(div);
+        });
+      };
+    }
+
+    function submitReschedule() {
+      const newDate = document.getElementById('newDate').value;
+      if (!newDate || !window.selectedNewTime) return alert("Selecione data e horário.");
+      
+      const tx = db.transaction("appointments", "readwrite");
+      const store = tx.objectStore("appointments");
+      currentAppt.status = 'REAGENDAMENTO_SOLICITADO';
+      currentAppt.notes = `Solicitou reagendamento para ${newDate} às ${window.selectedNewTime}`;
+      store.put(currentAppt);
+      
+      tx.oncomplete = () => {
+        alert("Sua solicitação foi enviada para a clínica. Aguarde confirmação.");
+        location.reload();
+      };
+    }
+
+    function logout() {
+      if (confirm("Deseja sair do portal?")) {
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = "index.html";
+      }
+    }
+  </script>
+</body>
+</html>

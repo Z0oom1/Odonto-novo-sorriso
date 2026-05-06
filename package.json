@@ -1,0 +1,23 @@
+{
+  "name": "odonto-novo-sorriso",
+  "version": "1.0.0",
+  "description": "Sistema Odonto Novo Sorriso com SQLite, Express e Electron",
+  "main": "main.js",
+  "scripts": {
+    "start": "node server.js",
+    "electron": "electron .",
+    "server": "node server.js",
+    "dev": "concurrently \"npm run server\" \"wait-on http://localhost:3000 && npm run electron\""
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.9.0",
+    "body-parser": "^1.20.5",
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.6",
+    "express": "^4.22.1",
+    "wait-on": "^9.0.5"
+  },
+  "devDependencies": {
+    "electron": "^42.0.0"
+  }
+}
