@@ -53,6 +53,8 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT, -- 'patient', 'appointment'
+    targetId INTEGER,
     message TEXT,
     date TEXT,
     read INTEGER DEFAULT 0

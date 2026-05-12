@@ -11,10 +11,38 @@
     rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <link rel="stylesheet" href="style.css?v=1.1" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>\n    <script src="api.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="api.js"></script>
+  <script>
+    // Bridge for Electron IPC
+    try {
+      const { ipcRenderer } = require('electron');
+      window.ipcRenderer = ipcRenderer;
+    } catch (e) {
+      window.ipcRenderer = { send: () => {} };
+    }
+  </script>
+  <audio id="startupSound" src="startup.mp3" preload="auto"></audio>
+  <style>
+    .loading-logo-box img { width: 120px; height: 120px; transition: inherit; }
+  </style>
 </head>
 
 <body>
+  <!-- Custom Title Bar -->
+  <div id="titleBar" class="title-bar">
+    <div class="title-left">
+      <img src="logo.png" alt="Logo" class="title-logo">
+      <span>NOVO SORRISO</span>
+    </div>
+    <div class="title-center" id="windowTitle">Acesso ao Sistema</div>
+    <div class="title-right">
+      <button class="win-btn" onclick="window.ipcRenderer.send('window-min')"><i class="fa-solid fa-minus"></i></button>
+      <button class="win-btn" onclick="window.ipcRenderer.send('window-max')"><i class="fa-solid fa-square"></i></button>
+      <button class="win-btn close" onclick="window.ipcRenderer.send('window-close')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+  </div>
 
   <!-- ===== LOADING SCREEN ===== -->
   <div id="loadingOverlay" class="loading-overlay hidden">
@@ -77,6 +105,12 @@
 
   <!-- ===== MAIN APP ===== -->
   <div id="mainApp" class="app-layout hidden">
+    <!-- Main Background Blobs -->
+    <div class="login-bg" style="opacity: 0.25; filter: saturate(1.5);">
+      <div class="login-blob blob1"></div>
+      <div class="login-blob blob2"></div>
+      <div class="login-blob blob3"></div>
+    </div>
 
     <!-- SIDEBAR -->
     <aside class="sidebar" id="sidebar">
@@ -115,7 +149,8 @@
           <i class="fa-solid fa-sliders"></i><span>Configurações</span>
         </a>
         <div class="nav-divider"></div>
-        <a href="../web/index.html" target="_blank" class="nav-item portal-link" style="background: rgba(30, 58, 138, 0.1); color: #1e3a8a;">
+        <a href="../web/index.html" target="_blank" class="nav-item portal-link"
+          style="background: rgba(30, 58, 138, 0.1); color: #1e3a8a;">
           <i class="fa-solid fa-rocket"></i><span>Portal do Cliente</span>
         </a>
       </nav>
@@ -143,7 +178,7 @@
           <button class="theme-toggle" onclick="toggleTheme()" title="Alternar Tema">
             <i class="fa-solid fa-moon" id="themeIcon"></i>
           </button>
-          <div class="notification-bell" onclick="toggleNotifPanel()">
+          <div class="notification-bell">
             <i class="fa-solid fa-bell"></i>
             <span class="notif-count" id="notifCount" style="display:none">0</span>
           </div>
@@ -156,6 +191,10 @@
         <div class="notif-panel-header">
           <h3>Notificações</h3>
           <button onclick="markAllRead()" class="btn-link">Marcar todas como lidas</button>
+        </div>
+        <div class="notif-tabs">
+          <button class="notif-tab active" onclick="setNotifTab('unread', this)">Geral</button>
+          <button class="notif-tab" onclick="setNotifTab('read', this)">Histórico</button>
         </div>
         <div id="notifList" class="notif-list"></div>
       </div>
@@ -207,10 +246,18 @@
           <div class="dashboard-grid">
             <div class="dashboard-card glass">
               <div class="card-header">
-                <h2><i class="fa-solid fa-calendar-check"></i> Consultas de Hoje</h2>
+                <h2><i class="fa-solid fa-calendar-day"></i> Consultas de Hoje</h2>
                 <button class="btn-sm btn-primary" onclick="navigate('appointments')">Ver Todas</button>
               </div>
               <div id="todayAppointments" class="appointment-list-mini"></div>
+            </div>
+
+            <div class="dashboard-card glass">
+              <div class="card-header">
+                <h2><i class="fa-solid fa-calendar-check"></i> Consultas de Amanhã</h2>
+                <button class="btn-sm btn-ghost" onclick="navigate('calendar')">Calendário</button>
+              </div>
+              <div id="tomorrowAppointments" class="appointment-list-mini"></div>
             </div>
 
             <div class="dashboard-card glass">
@@ -289,8 +336,8 @@
                   <th>Paciente</th>
                   <th>Data</th>
                   <th>Hora</th>
+                  <th>Procedimento</th>
                   <th>Status</th>
-                  <th>Observações</th>
                   <th>Ações</th>
                 </tr>
               </thead>
@@ -355,11 +402,15 @@
           <div class="reports-grid">
             <div class="glass report-card">
               <h3><i class="fa-solid fa-calendar-day"></i> Consultas por Dia</h3>
-              <canvas id="chartDay" width="400" height="200"></canvas>
+              <div class="chart-container">
+                <canvas id="chartDay"></canvas>
+              </div>
             </div>
             <div class="glass report-card">
               <h3><i class="fa-solid fa-calendar-week"></i> Consultas por Mês</h3>
-              <canvas id="chartMonth" width="400" height="200"></canvas>
+              <div class="chart-container">
+                <canvas id="chartMonth"></canvas>
+              </div>
             </div>
             <div class="glass report-card full-width">
               <h3><i class="fa-solid fa-circle-info"></i> Resumo Geral</h3>
@@ -457,6 +508,8 @@
   <!-- Availability Modal -->
   <div id="availabilityModal" class="modal-overlay hidden">
     <div class="modal glass animate-up" style="max-width: 600px;">
+      <div class="bg-blob-1"></div>
+      <div class="bg-blob-2"></div>
       <div class="modal-header">
         <h2 id="availModalTitle">Disponibilidade</h2>
         <button class="btn-icon" onclick="closeAvailModal()"><i class="fa-solid fa-xmark"></i></button>
@@ -468,6 +521,7 @@
       <div class="modal-footer">
         <button class="btn-primary" onclick="closeAvailModal()">Pronto</button>
       </div>
+    </div>
     </div>
   </div>
 
@@ -554,73 +608,63 @@
       </div>
       <form id="appointmentForm" onsubmit="saveAppointment(event)" class="modal-body">
         <div class="form-group">
-          <label>Paciente *</label>
+          <label><i class="fa-solid fa-user"></i> Paciente *</label>
           <div class="autocomplete-wrap">
-            <input type="text" id="apptPatientInput" class="form-input" placeholder="Buscar paciente..."
-              oninput="searchPatientAutocomplete()" required autocomplete="off" />
+            <div class="input-icon-wrap">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="apptPatientInput" class="form-input" placeholder="Buscar por nome ou CPF..."
+                oninput="searchPatientAutocomplete()" onfocus="searchPatientAutocomplete()" required autocomplete="off" />
+            </div>
             <input type="hidden" id="apptPatientId" />
             <div id="patientDropdown" class="autocomplete-dropdown hidden"></div>
           </div>
         </div>
+
         <div class="form-grid">
           <div class="form-group">
-            <label>Data *</label>
-            <input type="date" id="apptDate" class="form-input" onchange="loadAvailableSlots()" required />
+            <label><i class="fa-solid fa-calendar-day"></i> Data *</label>
+            <div class="input-icon-wrap">
+              <i class="fa-solid fa-calendar"></i>
+              <input type="date" id="apptDate" class="form-input" onchange="loadAvailableSlots()" required />
+            </div>
           </div>
           <div class="form-group">
-            <label>Horário *</label>
-            <select id="apptTime" class="form-select" required>
-              <option value="">Selecione a data primeiro</option>
+            <label><i class="fa-solid fa-clock"></i> Horário *</label>
+            <div class="input-icon-wrap">
+              <i class="fa-solid fa-hourglass-start"></i>
+              <select id="apptTime" class="form-select" required>
+                <option value="">Selecione a data...</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label><i class="fa-solid fa-circle-check"></i> Status</label>
+          <div class="input-icon-wrap">
+            <i class="fa-solid fa-tags"></i>
+            <select id="apptStatus" class="form-select">
+              <option value="AGENDADO">Agendado</option>
+              <option value="CONFIRMADO">Confirmado</option>
+              <option value="CANCELADO">Cancelado</option>
+              <option value="REALIZADA">Realizada (Finalizar)</option>
             </select>
           </div>
         </div>
+
         <div class="form-group">
-          <label>Status</label>
-          <select id="apptStatus" class="form-select">
-            <option value="AGENDADO">Agendado</option>
-            <option value="CONFIRMADO">Confirmado</option>
-            <option value="CANCELADO">Cancelado</option>
-            <option value="REALIZADA">Realizada (Finalizar)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Observações</label>
+          <label><i class="fa-solid fa-note-sticky"></i> Observações</label>
           <textarea id="apptNotes" class="form-input" rows="2"
-            placeholder="Tipo de consulta, observações..."></textarea>
+            placeholder="Informações adicionais da consulta..."></textarea>
         </div>
+
         <div class="modal-footer">
           <button type="button" class="btn-ghost" onclick="closeModal('appointmentModal')">Cancelar</button>
-          <button type="submit" class="btn-primary"><i class="fa-solid fa-save"></i> Salvar Agendamento</button>
+          <button type="submit" class="btn-primary" style="background: var(--primary); padding: 12px 30px;">
+            <i class="fa-solid fa-check-double"></i> Salvar Agendamento
+          </button>
         </div>
       </form>
-    </div>
-  </div>
-
-  <!-- Reschedule Approval Modal -->
-  <div id="rescheduleModal" class="modal-overlay hidden">
-    <div class="modal glass" style="max-width:520px">
-      <div class="modal-header">
-        <h2><i class="fa-solid fa-arrows-rotate"></i> Aprovar Reagendamento</h2>
-        <button class="modal-close" onclick="closeModal('rescheduleModal')"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-      <div class="modal-body">
-        <div id="rescheduleInfo" class="reschedule-info-box"></div>
-        <div class="form-group mt-1">
-          <label>Nova Data *</label>
-          <input type="date" id="newApptDate" class="form-input" onchange="loadRescheduleSlots()" />
-        </div>
-        <div class="form-group">
-          <label>Novo Horário *</label>
-          <select id="newApptTime" class="form-select">
-            <option value="">Selecione a data primeiro</option>
-          </select>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-ghost" onclick="closeModal('rescheduleModal')">Cancelar</button>
-          <button class="btn-primary" onclick="approveReschedule()"><i class="fa-solid fa-check"></i> Aprovar e
-            Confirmar</button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -670,7 +714,39 @@
     </div>
   </div>
 
+  <!-- Reschedule Modal -->
+  <div id="rescheduleModal" class="modal-overlay hidden">
+    <div class="modal glass" style="max-width:500px">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-arrows-rotate"></i> Solicitação de Reagendamento</h2>
+        <button class="modal-close" onclick="closeModal('rescheduleModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body" id="rescheduleBody"></div>
+    </div>
+  </div>
+
   <!-- TOAST -->
+  <!-- Reset Confirmation Modal -->
+  <div id="resetModal" class="modal-overlay hidden">
+    <div class="modal glass" style="max-width:400px; border: 1px solid rgba(239, 68, 68, 0.3);">
+      <div class="modal-header">
+        <h2 style="color: #ef4444;"><i class="fa-solid fa-triangle-exclamation"></i> ZERAR SISTEMA</h2>
+        <button class="modal-close" onclick="closeModal('resetModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body text-center">
+        <p class="mb-2">Você está prestes a deletar <b>TODOS</b> os dados do sistema (pacientes, consultas, configurações e notificações).</p>
+        <p class="text-red font-bold mb-2">ESTA AÇÃO É IRREVERSÍVEL!</p>
+        <p class="small text-muted">Para confirmar, clique no botão abaixo.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closeModal('resetModal')">Cancelar</button>
+        <button class="btn-primary" style="background: #ef4444;" onclick="executeSystemReset()">
+          <i class="fa-solid fa-trash-can"></i> DELETAR TUDO
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Day Preview Modal -->
   <div id="dayPreviewModal" class="modal-overlay hidden">
     <div class="modal glass" style="max-width: 500px;">

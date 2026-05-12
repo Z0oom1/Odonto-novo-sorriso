@@ -2,7 +2,7 @@ const API_URL = `http://${window.location.hostname}:3000/api`;
 
 const api = {
     async getData() {
-        const res = await fetch(`${API_URL}/data`);
+        const res = await fetch(`${API_URL}/data?t=${Date.now()}`, { cache: 'no-store' });
         return await res.json();
     },
     async save(store, data) {

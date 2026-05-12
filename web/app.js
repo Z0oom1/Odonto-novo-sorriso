@@ -1,8 +1,8 @@
-const API_URL = "http://192.168.1.156:3000/api";
+const API_URL = `http://${window.location.hostname}:3000/api`;
 
 async function fetchDB() {
   try {
-    const res = await fetch(API_URL + '/data');
+    const res = await fetch(API_URL + '/data?t=' + Date.now(), { cache: 'no-store' });
     return await res.json();
   } catch (err) {
     console.error("Server not reachable:", err);
@@ -15,6 +15,15 @@ async function saveEntity(store, data) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ store, data })
+  });
+  return await res.json();
+}
+
+async function deleteEntity(store, id) {
+  const res = await fetch(API_URL + '/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ store, id })
   });
   return await res.json();
 }
@@ -59,7 +68,7 @@ async function handleAuth() {
   const cpf = document.getElementById("loginCpf").value;
   if (cpf.length < 14) return alert("CPF inválido");
   
-  const btn = document.querySelector("#loginScreen .btn-primary");
+  const btn = document.querySelector("#authScreen .btn-primary");
   const origText = btn.innerText;
   btn.innerText = "Conectando...";
   btn.disabled = true;
@@ -104,7 +113,7 @@ function showCpfEntry() {
   document.getElementById("cpfEntry").classList.remove("hidden");
 }
 
-function completeRegistration() {
+async function completeRegistration() {
   const name = document.getElementById("regName").value;
   const phone = document.getElementById("regPhone").value;
   const birth = document.getElementById("regBirth").value;
@@ -117,9 +126,6 @@ function completeRegistration() {
 
   if (!name || !phone) return alert("Preencha os campos obrigatórios (Nome e WhatsApp).");
 
-  const tx = db.transaction("patients", "readwrite");
-  const store = tx.objectStore("patients");
-  
   const newPatient = {
     name,
     phone,
@@ -133,14 +139,19 @@ function completeRegistration() {
     createdAt: new Date().toISOString()
   };
 
-  const req = store.add(newPatient);
-  req.onsuccess = (e) => {
-    newPatient.id = e.target.result;
-    currentUser = newPatient;
-    localStorage.setItem("clientCpf", cpf);
-    showDashboard();
-  };
-  req.onerror = () => alert("Erro ao cadastrar. CPF já pode estar em uso.");
+  try {
+    const res = await saveEntity('patients', newPatient);
+    if (res.success) {
+      currentUser = res.data;
+      localStorage.setItem("clientCpf", cpf);
+      showDashboard();
+    } else {
+      alert("Erro ao cadastrar: " + res.error);
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Erro ao cadastrar. Verifique a conexão.");
+  }
 }
 
 function handleLogout() {
@@ -174,19 +185,16 @@ function showBooking() {
 }
 
 // APPOINTMENT LOADING
-function loadClientAppointments() {
-  const tx = db.transaction("appointments", "readonly");
-  const store = tx.objectStore("appointments");
-  const req = store.getAll();
+async function loadClientAppointments() {
+  const dbData = await fetchDB();
+  if (!dbData) return;
 
-  req.onsuccess = () => {
-    const all = req.result.filter(a => Number(a.patientId) === Number(currentUser.id));
-    const active = all.filter(a => a.status !== 'REALIZADA' && a.status !== 'CANCELADO');
-    const history = all.filter(a => a.status === 'REALIZADA' || a.status === 'CANCELADO');
+  const all = (dbData.appointments || []).filter(a => Number(a.patientId) === Number(currentUser.id));
+  const active = all.filter(a => a.status !== 'REALIZADA' && a.status !== 'CANCELADO');
+  const history = all.filter(a => a.status === 'REALIZADA' || a.status === 'CANCELADO');
 
-    renderList(active, "activeAppointments", true);
-    renderList(history, "historyAppointments", false);
-  };
+  renderList(active, "activeAppointments", true);
+  renderList(history, "historyAppointments", false);
 }
 
 function renderList(list, containerId, canManage) {
@@ -223,46 +231,39 @@ function renderList(list, containerId, canManage) {
 }
 
 // BOOKING FLOW
-function renderAvailableDates() {
+async function renderAvailableDates() {
   const container = document.getElementById("availableDates");
   container.innerHTML = `<p class="text-muted small">Carregando dias disponíveis...</p>`;
   
-  const tx = db.transaction("availability", "readonly");
-  const store = tx.objectStore("availability");
+  const dbData = await fetchDB();
+  if (!dbData) return;
+
+  const rawData = dbData.availability || {};
+  // rawData is { "YYYY-MM-DD": ["HH:MM", ...] }
   
-  store.getAll().onsuccess = (e) => {
-    const rawData = e.target.result;
-    console.log("DEBUG - Dados brutos do DB (availability):", rawData);
+  const allDays = Object.keys(rawData).map(date => ({ date, slots: rawData[date] }));
+  const blockedDays = dbData.settings.blockedDays || [];
+  
+  const futureDays = allDays.filter(d => {
+    const dateObj = new Date(d.date + 'T12:00:00');
+    const dayOfWeek = dateObj.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const isBlocked = blockedDays.includes(d.date);
     
-    const allDays = rawData.filter(d => d.open).sort((a,b) => a.date > b.date ? 1 : -1);
-    const today = new Date().toISOString().split('T')[0];
-    const futureDays = allDays.filter(d => d.date >= today);
-    
-    console.log("DEBUG - Dias abertos e futuros:", futureDays);
-    
-    container.innerHTML = "";
-    if (futureDays.length === 0) {
-      container.innerHTML = `
-        <div class="glass p-2 text-center" style="grid-column: span 4;">
-          <i class="fa-solid fa-calendar-xmark text-muted mb-1" style="font-size: 1.5rem; display: block;"></i>
-          <p class="text-muted small">A clínica ainda não disponibilizou dias para agendamento online.</p>
-        </div>
-      `;
-      return;
-    }
+    return d.date >= today && d.slots.length > 0 && !isWeekend && !isBlocked;
+  }).sort((a,b) => a.date > b.date ? 1 : -1);
 
-    futureDays.forEach(d => {
-      const dateObj = new Date(d.date + 'T12:00:00');
-      const weekday = dateObj.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
-      const daynum = dateObj.getDate();
+  futureDays.forEach(d => {
+    const dateObj = new Date(d.date + 'T12:00:00');
+    const weekday = dateObj.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+    const daynum = dateObj.getDate();
 
-      const item = document.createElement("div");
-      item.className = "date-item glass";
-      item.innerHTML = `<span class="weekday">${weekday}</span><span class="daynum">${daynum}</span>`;
-      item.onclick = () => selectDate(d.date, item);
-      container.appendChild(item);
-    });
-  };
+    const item = document.createElement("div");
+    item.className = "date-item glass";
+    item.innerHTML = `<span class="weekday">${weekday}</span><span class="daynum">${daynum}</span>`;
+    item.onclick = () => selectDate(d.date, item);
+    container.appendChild(item);
+  });
 }
 
 function selectDate(date, el) {
@@ -274,40 +275,41 @@ function selectDate(date, el) {
   renderAvailableTimes(date);
 }
 
-function renderAvailableTimes(date) {
+async function renderAvailableTimes(date) {
   const container = document.getElementById("availableTimes");
   container.innerHTML = "<p class='text-muted small'>Carregando horários...</p>";
   
-  const tx = db.transaction(["availability", "appointments"], "readonly");
-  const availStore = tx.objectStore("availability");
-  const apptStore = tx.objectStore("appointments");
-  
-  availStore.get(date).onsuccess = (e) => {
-    const availData = e.target.result;
-    const allowedTimes = availData ? (availData.slots || []) : [];
+  const dbData = await fetchDB();
+  if (!dbData) return;
+
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const currentTime = now.getHours() * 60 + now.getMinutes();
+
+  const allowedTimes = (dbData.availability && dbData.availability[date]) || [];
+  const existing = (dbData.appointments || []).filter(a => a.date === date && a.status !== 'CANCELADO');
+  const occupied = existing.map(a => a.time);
+
+  container.innerHTML = "";
+  if (allowedTimes.length === 0) {
+    container.innerHTML = "<p class='text-muted small'>Não há horários disponíveis para este dia.</p>";
+    return;
+  }
+
+  allowedTimes.forEach(t => {
+    const [h, m] = t.split(':').map(Number);
+    const slotTime = h * 60 + m;
+    const isPast = (date === todayStr && slotTime <= currentTime) || (date < todayStr);
     
-    apptStore.getAll().onsuccess = (ev) => {
-      const existing = ev.target.result.filter(a => a.date === date && a.status !== 'CANCELADO');
-      const occupied = existing.map(a => a.time);
-
-      container.innerHTML = "";
-      if (allowedTimes.length === 0) {
-        container.innerHTML = "<p class='text-muted small'>Não há horários disponíveis para este dia.</p>";
-        return;
-      }
-
-      allowedTimes.forEach(t => {
-        const isOccupied = occupied.includes(t);
-        const item = document.createElement("div");
-        item.className = `time-item glass ${isOccupied ? 'disabled' : ''}`;
-        item.innerText = t;
-        if (!isOccupied) {
-          item.onclick = () => selectTime(t, item);
-        }
-        container.appendChild(item);
-      });
-    };
-  };
+    const isOccupied = occupied.includes(t) || isPast;
+    const item = document.createElement("div");
+    item.className = `time-item glass ${isOccupied ? 'disabled' : ''}`;
+    item.innerText = t + (isPast && !occupied.includes(t) ? ' (Passado)' : '');
+    if (!isOccupied) {
+      item.onclick = () => selectTime(t, item);
+    }
+    container.appendChild(item);
+  });
 }
 
 function selectTime(time, el) {
@@ -317,7 +319,7 @@ function selectTime(time, el) {
   document.getElementById("confirmBtn").disabled = false;
 }
 
-function confirmBooking() {
+async function confirmBooking() {
   if (!selectedDate || !selectedTime || !currentUser) return;
 
   const newAppt = {
@@ -330,38 +332,36 @@ function confirmBooking() {
     createdAt: new Date().toISOString()
   };
 
-  const tx = db.transaction(["appointments", "notifications"], "readwrite");
-  const store = tx.objectStore("appointments");
-  const nStore = tx.objectStore("notifications");
-
-  store.add(newAppt);
-  
-  nStore.add({
-    title: "Novo Agendamento",
-    message: `${currentUser.name} agendou uma consulta para ${selectedDate.split('-').reverse().join('/')} às ${selectedTime}`,
-    time: new Date().toISOString(),
-    type: "NEW_BOOKING",
-    read: false
-  });
-
-  tx.oncomplete = () => {
-    alert("Agendamento realizado com sucesso!");
-    showDashboard();
-  };
+  try {
+    const res = await saveEntity('appointments', newAppt);
+    if (res.success) {
+      alert("Agendamento realizado com sucesso!");
+      showDashboard();
+    } else {
+      alert("Erro ao agendar: " + res.error);
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Erro ao agendar. Verifique a conexão.");
+  }
 }
 
 // CANCEL / RESCHEDULE
-function cancelAppt(id) {
+async function cancelAppt(id) {
   if (!confirm("Deseja realmente cancelar este agendamento?")) return;
-  const tx = db.transaction("appointments", "readwrite");
-  tx.objectStore("appointments").get(Number(id)).onsuccess = (e) => {
-    const data = e.target.result;
-    data.status = 'CANCELADO';
-    tx.objectStore("appointments").put(data).onsuccess = () => {
+  
+  const dbData = await fetchDB();
+  if (!dbData) return;
+
+  const appt = (dbData.appointments || []).find(a => Number(a.id) === Number(id));
+  if (appt) {
+    appt.status = 'CANCELADO';
+    const res = await saveEntity('appointments', appt);
+    if (res.success) {
       alert("Agendamento cancelado.");
       loadClientAppointments();
-    };
-  };
+    }
+  }
 }
 
 function reschedule(id) {
@@ -380,35 +380,40 @@ function closeRescheduleModal() {
   }, 300);
 }
 
-function renderRescheduleDates() {
+async function renderRescheduleDates() {
   const container = document.getElementById("rescheduleAvailableDates");
   container.innerHTML = `<p class="text-muted small">Carregando dias...</p>`;
   
-  const tx = db.transaction("availability", "readonly");
-  const store = tx.objectStore("availability");
-  
-  store.getAll().onsuccess = (e) => {
-    const allDays = e.target.result.filter(d => d.open).sort((a,b) => a.date > b.date ? 1 : -1);
-    const futureDays = allDays.filter(d => d.date >= new Date().toISOString().split('T')[0]);
+  const dbData = await fetchDB();
+  if (!dbData) return;
+
+  const blockedDays = dbData.settings.blockedDays || [];
+  const futureDays = allDays.filter(d => {
+    const dateObj = new Date(d.date + 'T12:00:00');
+    const dayOfWeek = dateObj.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const isBlocked = blockedDays.includes(d.date);
     
-    container.innerHTML = "";
-    if (futureDays.length === 0) {
-      container.innerHTML = `<p class="text-muted small p-2">Nenhum dia disponível.</p>`;
-      return;
-    }
+    return d.date >= new Date().toISOString().split('T')[0] && d.slots.length > 0 && !isWeekend && !isBlocked;
+  }).sort((a,b) => a.date > b.date ? 1 : -1);
+  
+  container.innerHTML = "";
+  if (futureDays.length === 0) {
+    container.innerHTML = `<p class="text-muted small p-2">Nenhum dia disponível.</p>`;
+    return;
+  }
 
-    futureDays.forEach(d => {
-      const dateObj = new Date(d.date + 'T12:00:00');
-      const weekday = dateObj.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
-      const daynum = dateObj.getDate();
+  futureDays.forEach(d => {
+    const dateObj = new Date(d.date + 'T12:00:00');
+    const weekday = dateObj.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+    const daynum = dateObj.getDate();
 
-      const item = document.createElement("div");
-      item.className = "date-item glass";
-      item.innerHTML = `<span class="weekday">${weekday}</span><span class="daynum">${daynum}</span>`;
-      item.onclick = () => selectRescheduleDate(d.date, item);
-      container.appendChild(item);
-    });
-  };
+    const item = document.createElement("div");
+    item.className = "date-item glass";
+    item.innerHTML = `<span class="weekday">${weekday}</span><span class="daynum">${daynum}</span>`;
+    item.onclick = () => selectRescheduleDate(d.date, item);
+    container.appendChild(item);
+  });
 }
 
 function selectRescheduleDate(date, el) {
@@ -419,29 +424,20 @@ function selectRescheduleDate(date, el) {
   renderRescheduleTimes(date);
 }
 
-function renderRescheduleTimes(date) {
-  const container = document.getElementById("rescheduleAvailableTimes");
-  container.innerHTML = "";
-  
-  const times = ["08:00", "09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
-  
-  const tx = db.transaction("appointments", "readonly");
-  const store = tx.objectStore("appointments");
-  store.getAll().onsuccess = (e) => {
-    const existing = e.target.result.filter(a => a.date === date && a.status !== 'CANCELADO');
-    const occupied = existing.map(a => a.time);
-
-    times.forEach(t => {
-      const isOccupied = occupied.includes(t);
-      const item = document.createElement("div");
-      item.className = `time-item glass ${isOccupied ? 'disabled' : ''}`;
-      item.innerText = t;
-      if (!isOccupied) {
-        item.onclick = () => selectRescheduleTime(t, item);
-      }
-      container.appendChild(item);
-    });
-  };
+  allowedTimes.forEach(t => {
+    const [h, m] = t.split(':').map(Number);
+    const slotTime = h * 60 + m;
+    const isPast = (date === todayStr && slotTime <= currentTime) || (date < todayStr);
+    
+    const isOccupied = occupied.includes(t) || isPast;
+    const item = document.createElement("div");
+    item.className = `time-item glass ${isOccupied ? 'disabled' : ''}`;
+    item.innerText = t + (isPast && !occupied.includes(t) ? ' (Passado)' : '');
+    if (!isOccupied) {
+      item.onclick = () => selectRescheduleTime(t, item);
+    }
+    container.appendChild(item);
+  });
 }
 
 function selectRescheduleTime(time, el) {
@@ -451,40 +447,27 @@ function selectRescheduleTime(time, el) {
   document.getElementById("rescheduleConfirmBtn").disabled = false;
 }
 
-function confirmReschedule() {
+async function confirmReschedule() {
   if (!rescheduleApptId || !rescheduleSelectedDate || !rescheduleSelectedTime) return;
 
-  const tx = db.transaction(["appointments", "notifications"], "readwrite");
-  const store = tx.objectStore("appointments");
-  const nStore = tx.objectStore("notifications");
+  const dbData = await fetchDB();
+  if (!dbData) return;
 
-  store.get(rescheduleApptId).onsuccess = (e) => {
-    const appt = e.target.result;
-    if (appt) {
-      // Store original date/time in notes or a specific field for admin to see
-      appt.rescheduleRequest = {
-        newDate: rescheduleSelectedDate,
-        newTime: rescheduleSelectedTime
-      };
-      appt.status = 'REAGENDAMENTO_SOLICITADO';
-      store.put(appt);
-
-      nStore.add({
-        title: "Solicitação de Reagendamento",
-        message: `${currentUser.name} solicitou reagendar para ${rescheduleSelectedDate.split('-').reverse().join('/')} às ${rescheduleSelectedTime}`,
-        time: new Date().toISOString(),
-        type: "RESCHEDULE_REQUEST",
-        apptId: rescheduleApptId,
-        read: false
-      });
+  const appt = (dbData.appointments || []).find(a => Number(a.id) === Number(rescheduleApptId));
+  if (appt) {
+    appt.rescheduleRequest = {
+      newDate: rescheduleSelectedDate,
+      newTime: rescheduleSelectedTime
+    };
+    appt.status = 'REAGENDAMENTO_SOLICITADO';
+    
+    const res = await saveEntity('appointments', appt);
+    if (res.success) {
+      alert("Solicitação de reagendamento enviada! Aguarde a confirmação da clínica.");
+      closeRescheduleModal();
+      loadClientAppointments();
     }
-  };
-
-  tx.oncomplete = () => {
-    alert("Solicitação de reagendamento enviada! Aguarde a confirmação da clínica.");
-    closeRescheduleModal();
-    loadClientAppointments();
-  };
+  }
 }
 
 function updateOriginIndicator() {
