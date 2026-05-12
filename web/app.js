@@ -44,7 +44,7 @@ function checkSession() {
 function formatCPF(i) {
   let v = i.value.replace(/\D/g, '');
   if (v.length > 11) v = v.slice(0, 11);
-  
+
   if (v.length > 9) {
     v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
   } else if (v.length > 6) {
@@ -68,34 +68,38 @@ let selectedTime = null;
 let rescheduleApptId = null;
 let rescheduleSelectedDate = null;
 let rescheduleSelectedTime = null;
+const today = new Date().toISOString().split('T')[0];
 
 // AUTH LOGIC
 async function handleAuth() {
   const cpf = document.getElementById("loginCpf").value;
   if (cpf.length < 14) return alert("CPF inválido");
-  
+
   const btn = document.querySelector("#authScreen .btn-primary");
   const origText = btn.innerText;
   btn.innerText = "Conectando...";
   btn.disabled = true;
 
   await loginByCpf(cpf);
-  
+
   btn.innerText = origText;
   btn.disabled = false;
 }
 
 async function loginByCpf(cpf) {
   const cleanCpf = cpf.replace(/\D/g, '');
+  console.log("Tentando login no portal com CPF:", cleanCpf);
   const dbData = await fetchDB();
-  
+
   if (!dbData) {
+    console.error("Falha ao obter dados do banco para o login.");
     return alert("Não foi possível conectar ao servidor. Verifique se ele está rodando.");
   }
-  
+
   const patients = dbData.patients || [];
+  console.log(`Buscando em ${patients.length} pacientes...`);
   const found = patients.find(p => p.cpf.replace(/\D/g, '') === cleanCpf || p.cpf === cpf);
-  
+
   if (found) {
     proceedToLogin(found, cpf);
   } else {
@@ -174,7 +178,7 @@ function showDashboard() {
   document.getElementById("authScreen").classList.add("hidden");
   document.getElementById("bookingScreen").classList.add("hidden");
   document.getElementById("dashboard").classList.remove("hidden");
-  
+
   if (currentUser) {
     document.getElementById("clientName").innerText = currentUser.name.split(' ')[0];
     loadClientAppointments();
@@ -214,7 +218,7 @@ function renderList(list, containerId, canManage) {
     const dateObj = new Date(a.date + 'T12:00:00');
     const day = dateObj.getDate();
     const month = dateObj.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
-    
+
     return `
       <div class="appt-card glass ${a.status === 'REALIZADA' ? 'finished' : ''}">
         <div class="appt-info">
@@ -240,25 +244,36 @@ function renderList(list, containerId, canManage) {
 async function renderAvailableDates() {
   const container = document.getElementById("availableDates");
   container.innerHTML = `<p class="text-muted small">Carregando dias disponíveis...</p>`;
-  
+
   const dbData = await fetchDB();
   if (!dbData) return;
 
   const rawData = dbData.availability || {};
   // rawData is { "YYYY-MM-DD": ["HH:MM", ...] }
-  
+
   const allDays = Object.keys(rawData).map(date => ({ date, slots: rawData[date] }));
   const blockedDays = dbData.settings.blockedDays || [];
-  
+
   const futureDays = allDays.filter(d => {
     const dateObj = new Date(d.date + 'T12:00:00');
     const dayOfWeek = dateObj.getDay();
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    const isBlocked = blockedDays.includes(d.date);
     
-    return d.date >= today && d.slots.length > 0 && !isWeekend && !isBlocked;
-  }).sort((a,b) => a.date > b.date ? 1 : -1);
+    let blockedDays = dbData.settings.blockedDays || [];
+    if (typeof blockedDays === 'string') {
+      try { blockedDays = JSON.parse(blockedDays); } catch(e) { blockedDays = []; }
+    }
+    const isBlocked = blockedDays.includes(d.date);
 
+    return d.date >= today && d.slots.length > 0 && !isWeekend && !isBlocked;
+  }).sort((a, b) => a.date > b.date ? 1 : -1);
+
+  if (futureDays.length === 0) {
+    container.innerHTML = `<p class="text-muted small">Nenhum dia disponível para agendamento no momento.</p>`;
+    return;
+  }
+
+  container.innerHTML = "";
   futureDays.forEach(d => {
     const dateObj = new Date(d.date + 'T12:00:00');
     const weekday = dateObj.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
@@ -276,7 +291,7 @@ function selectDate(date, el) {
   selectedDate = date;
   document.querySelectorAll(".date-item").forEach(i => i.classList.remove("active"));
   el.classList.add("active");
-  
+
   document.getElementById("timeSelection").classList.remove("hidden");
   renderAvailableTimes(date);
 }
@@ -284,7 +299,7 @@ function selectDate(date, el) {
 async function renderAvailableTimes(date) {
   const container = document.getElementById("availableTimes");
   container.innerHTML = "<p class='text-muted small'>Carregando horários...</p>";
-  
+
   const dbData = await fetchDB();
   if (!dbData) return;
 
@@ -306,7 +321,7 @@ async function renderAvailableTimes(date) {
     const [h, m] = t.split(':').map(Number);
     const slotTime = h * 60 + m;
     const isPast = (date === todayStr && slotTime <= currentTime) || (date < todayStr);
-    
+
     const isOccupied = occupied.includes(t) || isPast;
     const item = document.createElement("div");
     item.className = `time-item glass ${isOccupied ? 'disabled' : ''}`;
@@ -355,7 +370,7 @@ async function confirmBooking() {
 // CANCEL / RESCHEDULE
 async function cancelAppt(id) {
   if (!confirm("Deseja realmente cancelar este agendamento?")) return;
-  
+
   const dbData = await fetchDB();
   if (!dbData) return;
 
@@ -389,7 +404,7 @@ function closeRescheduleModal() {
 async function renderRescheduleDates() {
   const container = document.getElementById("rescheduleAvailableDates");
   container.innerHTML = `<p class="text-muted small">Carregando dias...</p>`;
-  
+
   const dbData = await fetchDB();
   if (!dbData) return;
 
@@ -399,10 +414,10 @@ async function renderRescheduleDates() {
     const dayOfWeek = dateObj.getDay();
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
     const isBlocked = blockedDays.includes(d.date);
-    
+
     return d.date >= new Date().toISOString().split('T')[0] && d.slots.length > 0 && !isWeekend && !isBlocked;
-  }).sort((a,b) => a.date > b.date ? 1 : -1);
-  
+  }).sort((a, b) => a.date > b.date ? 1 : -1);
+
   container.innerHTML = "";
   if (futureDays.length === 0) {
     container.innerHTML = `<p class="text-muted small p-2">Nenhum dia disponível.</p>`;
@@ -430,21 +445,21 @@ function selectRescheduleDate(date, el) {
   renderRescheduleTimes(date);
 }
 
-  allowedTimes.forEach(t => {
-    const [h, m] = t.split(':').map(Number);
-    const slotTime = h * 60 + m;
-    const isPast = (date === todayStr && slotTime <= currentTime) || (date < todayStr);
-    
-    const isOccupied = occupied.includes(t) || isPast;
-    const item = document.createElement("div");
-    item.className = `time-item glass ${isOccupied ? 'disabled' : ''}`;
-    item.innerText = t + (isPast && !occupied.includes(t) ? ' (Passado)' : '');
-    if (!isOccupied) {
-      item.onclick = () => selectRescheduleTime(t, item);
-    }
-    container.appendChild(item);
-  });
-}
+allowedTimes.forEach(t => {
+  const [h, m] = t.split(':').map(Number);
+  const slotTime = h * 60 + m;
+  const isPast = (date === todayStr && slotTime <= currentTime) || (date < todayStr);
+
+  const isOccupied = occupied.includes(t) || isPast;
+  const item = document.createElement("div");
+  item.className = `time-item glass ${isOccupied ? 'disabled' : ''}`;
+  item.innerText = t + (isPast && !occupied.includes(t) ? ' (Passado)' : '');
+  if (!isOccupied) {
+    item.onclick = () => selectRescheduleTime(t, item);
+  }
+  container.appendChild(item);
+});
+
 
 function selectRescheduleTime(time, el) {
   rescheduleSelectedTime = time;
@@ -466,7 +481,7 @@ async function confirmReschedule() {
       newTime: rescheduleSelectedTime
     };
     appt.status = 'REAGENDAMENTO_SOLICITADO';
-    
+
     const res = await saveEntity('appointments', appt);
     if (res.success) {
       alert("Solicitação de reagendamento enviada! Aguarde a confirmação da clínica.");

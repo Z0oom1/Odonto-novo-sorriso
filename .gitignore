@@ -1,3 +1,4 @@
 node_modules/
 odonto.db
 .DS_Store
+dist/
