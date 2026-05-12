@@ -1,16 +1,20 @@
 :root {
-  /* Apple Design System (Dark) */
-  --primary: #0066cc;
-  --primary-light: #2997ff;
-  --primary-hover: #0071e3;
-  --secondary: #0066cc;
-  --bg-dark: #000000;
-  --bg-card: #272729;
-  --text-main: #ffffff;
-  --text-muted: #cccccc;
-  --border-glass: rgba(255, 255, 255, 0.08);
-  --input-bg: #2a2a2c;
-  --sidebar-bg: #252527;
+  /* Acrylic Modern Dark (Default) */
+  --primary: #3b82f6;
+  --primary-light: #60a5fa;
+  --primary-hover: #2563eb;
+  --secondary: #3b82f6;
+  --bg-dark: #111827;
+  --bg-card: #1E293B;
+  --text-main: #F1F5F9;
+  --text-muted: #94A3B8;
+  --border-glass: #334155;
+  --input-bg: #1E293B;
+  --sidebar-bg: #0F172A;
+  --sidebar-bg-glass: rgba(15, 23, 42, 0.8);
+  --card-hover: #273449;
+  --title-bar-bg: rgba(15, 23, 42, 0.95);
+  --title-text: #F1F5F9;
   --sidebar-width: 280px;
   --sidebar-collapsed-width: 80px;
   --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -38,6 +42,10 @@
   --border-glass: #e0e0e0;
   --input-bg: #ffffff;
   --sidebar-bg: #f5f5f7;
+  --sidebar-bg-glass: rgba(255, 255, 255, 0.6);
+  --card-hover: rgba(0, 0, 0, 0.02);
+  --title-bar-bg: rgba(255, 255, 255, 0.9);
+  --title-text: #1E293B;
 }
 
 * {
@@ -320,9 +328,9 @@ select option {
 /* SIDEBAR */
 .sidebar {
   width: var(--sidebar-width);
-  background: rgba(255, 255, 255, 0.6) !important; /* Efeito Acrílico */
+  background: var(--sidebar-bg-glass) !important; /* Efeito Acrílico Dinâmico */
   backdrop-filter: blur(25px) saturate(180%);
-  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  border-right: 1px solid var(--border-glass);
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -441,11 +449,11 @@ select option {
 .sidebar-user {
   padding: 1rem 1.25rem;
   margin-top: auto;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  border-top: 1px solid var(--border-glass);
   display: flex;
   align-items: center;
   gap: 1rem;
-  background: rgba(255, 255, 255, 0.4); /* Levemente mais sólido para destaque */
+  background: var(--sidebar-bg-glass);
   backdrop-filter: blur(15px);
   position: sticky;
   bottom: 0;
@@ -910,7 +918,7 @@ select option {
 }
 
 .appointment-mini-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--card-hover);
   transform: scale(1.02);
 }
 
@@ -2408,12 +2416,12 @@ input::placeholder, textarea::placeholder {
   color: #64748b;
 }
 
-/* CUSTOM TITLE BAR - LIGHT THEME */
+/* CUSTOM TITLE BAR - DYNAMIC THEME */
 .title-bar {
   height: 36px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--title-bar-bg);
   backdrop-filter: blur(12px);
-  color: #64748b;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2427,7 +2435,7 @@ input::placeholder, textarea::placeholder {
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.3px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  border-bottom: 1px solid var(--border-glass);
   box-shadow: 0 1px 3px rgba(0,0,0,0.02);
 }
 
@@ -2449,7 +2457,7 @@ input::placeholder, textarea::placeholder {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  color: #1e293b;
+  color: var(--title-text);
   font-weight: 700;
   text-transform: uppercase;
   font-size: 0.75rem;
@@ -2534,5 +2542,7 @@ input::placeholder, textarea::placeholder {
   transition: opacity 1s ease;
   pointer-events: none;
 }
+
+
 
 
