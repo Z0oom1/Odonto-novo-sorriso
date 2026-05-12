@@ -8,7 +8,32 @@
     "electron": "electron .",
     "server": "node server.js",
     "dev": "electron .",
+    "build": "electron-builder",
+    "pack": "electron-packager . \"Novo Sorriso\" --platform=win32 --arch=x64 --out=dist --overwrite",
     "postinstall": "electron-rebuild || npx @electron/rebuild || echo 'Skip rebuild if not needed'"
+  },
+  "build": {
+    "appId": "com.odonto.novosorriso",
+    "productName": "Novo Sorriso",
+    "copyright": "Copyright © 2026 Novo Sorriso",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "img/logo.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Novo Sorriso"
+    },
+    "files": [
+      "**/*",
+      "!dist/*"
+    ],
+    "asar": true
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",
@@ -22,6 +47,8 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.1",
-    "electron": "^32.0.0"
+    "electron": "^32.0.0",
+    "electron-builder": "^26.8.1",
+    "electron-packager": "^17.1.2"
   }
 }
