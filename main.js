@@ -1,4 +1,6 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage } = require('electron');
+const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 
 // Handlers para controle de janela customizado
@@ -48,6 +50,29 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Gerenciar JWT_SECRET com safeStorage
+  const secretPath = path.join(app.getPath('userData'), 'secret.bin');
+  let jwtSecret;
+
+  if (fs.existsSync(secretPath)) {
+    try {
+      const encrypted = fs.readFileSync(secretPath);
+      jwtSecret = safeStorage.decryptString(encrypted);
+    } catch (e) {
+      console.error("Erro ao descriptografar segredo:", e);
+    }
+  }
+
+  if (!jwtSecret) {
+    jwtSecret = crypto.randomBytes(64).toString('hex');
+    if (safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(jwtSecret);
+      fs.writeFileSync(secretPath, encrypted);
+    }
+  }
+
+  process.env.JWT_SECRET = jwtSecret;
+
   // Inicia o servidor Express embutido no processo Electron
   try {
     require('./server.js');

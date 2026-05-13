@@ -53,6 +53,10 @@ const model = {
     },
 
     sanitizeInput(str) {
+        if (typeof DOMPurify !== 'undefined') {
+            return DOMPurify.sanitize(str);
+        }
+        // Fallback simples se DOMPurify não carregar
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
