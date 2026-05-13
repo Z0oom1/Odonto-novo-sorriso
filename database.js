@@ -1,4 +1,5 @@
 const Database = require('better-sqlite3');
+const bcrypt = require('bcryptjs');
 const path = require('path');
 
 const dbPath = path.join(__dirname, 'odonto.db');
@@ -64,8 +65,9 @@ db.exec(`
 // Seed admin se não existir
 const admin = db.prepare('SELECT * FROM users WHERE username = ?').get('admin');
 if (!admin) {
+  const hashedPassword = bcrypt.hashSync('admin123', 10);
   db.prepare('INSERT INTO users (username, name, pass, role) VALUES (?, ?, ?, ?)')
-    .run('admin', 'Administrador', 'admin123', 'ADMIN');
+    .run('admin', 'Administrador', hashedPassword, 'ADMIN');
 }
 
 module.exports = db;
