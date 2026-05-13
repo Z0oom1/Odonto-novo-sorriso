@@ -2,9 +2,16 @@
 const controller = {
     async init() {
         const user = model.loadUser();
-        if (user && api.getToken()) {
-            await this.loadInitialAppData();
-            view.initApp();
+        const token = api.getToken();
+        if (user && token) {
+            try {
+                await this.loadInitialAppData();
+                view.initApp();
+            } catch (e) {
+                console.error("Session invalid", e);
+                model.clearUser();
+                view.showLogin();
+            }
         } else {
             view.showLogin();
         }

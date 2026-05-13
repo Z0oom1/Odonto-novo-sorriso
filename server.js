@@ -192,10 +192,13 @@ app.post('/api/delete', authenticateToken, (req, res) => {
         if (store === 'users') {
             db.prepare('DELETE FROM users WHERE username = ?').run(id);
         } else {
-            db.prepare(`DELETE FROM ${store} WHERE id = ?`).run(id);
+            // Garante que o ID seja um número se for para tabelas com ID numérico
+            const targetId = (store === 'patients' || store === 'appointments' || store === 'notifications') ? parseInt(id) : id;
+            db.prepare(`DELETE FROM ${store} WHERE id = ?`).run(targetId);
         }
         res.json({ success: true });
     } catch (err) {
+        console.error("Delete error:", err);
         res.status(500).json({ success: false, error: err.message });
     }
 });

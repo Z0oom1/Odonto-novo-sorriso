@@ -7,9 +7,14 @@ const view = {
         mainApp.classList.add("revealed");
         
         const user = model.state.currentUser;
-        document.getElementById("sidebarUserName").innerText = user.name;
-        document.getElementById("sidebarUserRole").innerText = user.role === "ADMIN" ? "Administrador" : "Funcionário";
+        if (user) {
+            document.getElementById("sidebarUserName").innerText = user.name;
+            document.getElementById("sidebarUserRole").innerText = user.role === "ADMIN" ? "Administrador" : "Funcionário";
+            const avatar = document.getElementById("sidebarAvatar");
+            if (avatar) avatar.innerText = user.name.charAt(0).toUpperCase();
+        }
         
+        this.applyTheme(localStorage.getItem('theme') || 'light');
         this.updateTopbarDate();
         this.renderNotifications();
     },
@@ -17,6 +22,7 @@ const view = {
     showLogin() {
         document.getElementById("loginScreen").classList.remove("hidden");
         document.getElementById("mainApp").classList.add("hidden");
+        this.applyTheme(localStorage.getItem('theme') || 'light');
     },
 
     showLoginError(msg) {
@@ -50,6 +56,21 @@ const view = {
         }, 2300);
     },
 
+    toggleTheme() {
+        const current = document.documentElement.getAttribute('data-theme') || 'dark';
+        const next = current === 'dark' ? 'light' : 'dark';
+        this.applyTheme(next);
+    },
+
+    applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+        const icon = document.getElementById('themeIcon');
+        if (icon) {
+            icon.className = theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        }
+    },
+
     renderPatients() {
         const list = model.state.patients.data;
         const body = document.getElementById("patientsBody");
@@ -62,21 +83,29 @@ const view = {
         } else {
             document.getElementById("noPatientsMsg").classList.add("hidden");
             list.forEach(p => {
-                body.innerHTML += `
-                    <tr>
-                        <td><div style="display: flex; align-items: center;">${this.getGenderIcon(p)} ${p.name}</div></td>
-                        <td>${p.cpf}</td>
-                        <td>${p.phone}</td>
-                        <td>${p.email}</td>
-                        <td>${p.gender || '-'}</td>
-                        <td>
-                            <div class="table-actions">
-                                <button class="btn-sm btn-ghost" onclick="editPatient(${p.id})"><i class="fa-solid fa-edit"></i></button>
-                                <button class="btn-sm btn-ghost text-red" onclick="deletePatient(${p.id})"><i class="fa-solid fa-trash"></i></button>
-                            </div>
-                        </td>
-                    </tr>
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><div style="display: flex; align-items: center;">${this.getGenderIcon(p)} ${p.name}</div></td>
+                    <td>${p.cpf}</td>
+                    <td>${p.phone}</td>
+                    <td>${p.email}</td>
+                    <td>${p.gender || '-'}</td>
+                    <td>
+                        <div class="table-actions">
+                            <button class="btn-sm btn-ghost btn-edit-patient" data-id="${p.id}"><i class="fa-solid fa-edit"></i></button>
+                            <button class="btn-sm btn-ghost text-red btn-delete-patient" data-id="${p.id}"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </td>
                 `;
+                body.appendChild(tr);
+            });
+            
+            // Re-bind events
+            body.querySelectorAll('.btn-edit-patient').forEach(btn => {
+                btn.onclick = () => window.editPatient(btn.dataset.id);
+            });
+            body.querySelectorAll('.btn-delete-patient').forEach(btn => {
+                btn.onclick = () => window.deletePatient(btn.dataset.id);
             });
         }
         this.renderPagination('patientsPagination', model.state.patients.pagination, 'loadPatients');
@@ -86,11 +115,14 @@ const view = {
         const container = document.getElementById(containerId);
         if (!container) return;
         
-        let html = '';
+        container.innerHTML = '';
         for (let i = 1; i <= pagination.pages; i++) {
-            html += `<button class="btn-page ${i === pagination.page ? 'active' : ''}" onclick="controller.${methodName}(${i})">${i}</button>`;
+            const btn = document.createElement('button');
+            btn.className = `btn-page ${i === pagination.page ? 'active' : ''}`;
+            btn.innerText = i;
+            btn.onclick = () => controller[methodName](i);
+            container.appendChild(btn);
         }
-        container.innerHTML = html;
     },
 
     getGenderIcon(p) {
@@ -104,7 +136,8 @@ const view = {
     updateTopbarDate() {
         const now = new Date();
         const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-        document.getElementById('topbarDate').innerText = now.toLocaleDateString('pt-BR', options);
+        const el = document.getElementById('topbarDate');
+        if (el) el.innerText = now.toLocaleDateString('pt-BR', options);
     },
 
     renderNotifications() {
@@ -117,8 +150,11 @@ const view = {
         }
     },
 
-    showToast(msg) {
-        console.log("TOAST:", msg);
-        // Implementar visual toast se necessário
+    showToast(msg, type = 'success') {
+        console.log(`TOAST [${type}]:`, msg);
+        // Implementar visual toast real se existir no CSS
     }
 };
+
+// Global proxies for theme
+window.toggleTheme = () => view.toggleTheme();
