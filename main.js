@@ -9,11 +9,11 @@ ipcMain.on('window-max', () => {
 });
 ipcMain.on('window-close', () => mainWindow?.close());
 
-// Otimizações extremas para PCs antigos e de baixo desempenho
-app.disableHardwareAcceleration(); // Desabilita GPU
-app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256'); // Limite de 256MB RAM pro V8
+// Otimizações de performance: Reabilitando GPU para UI avançada e aumentando limite de RAM
+// app.disableHardwareAcceleration(); // Removido para permitir GPU
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=2048'); // Aumentado para 2GB RAM para gestão eficiente de dados
 
 let mainWindow = null;
 
