@@ -50,6 +50,25 @@ const api = {
             body: JSON.stringify({ store, id })
         });
     },
+    async getBackup() {
+        return await this.request('/backup');
+    },
+    async restoreBackup(data) {
+        return await this.request('/restore', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+    },
+    async resetSystem() {
+        return await this.request('/reset', {
+            method: 'POST'
+        });
+    },
+    async readAllNotifications() {
+        return await this.request('/notifications/read-all', {
+            method: 'POST'
+        });
+    },
     async login(user, pass) {
         const res = await fetch(`${API_URL}/login`, {
             method: 'POST',

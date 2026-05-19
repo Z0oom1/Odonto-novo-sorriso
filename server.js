@@ -33,10 +33,65 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
+// Middleware de Autenticação JWT Opcional (para o portal do cliente)
+const authenticateTokenOptional = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        req.user = null;
+        return next();
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ error: 'Token inválido ou expirado' });
+        req.user = user;
+        next();
+    });
+};
+
 // Servir arquivos estáticos
 app.use(express.static(path.join(__dirname, 'web')));
 app.use('/desktop', express.static(path.join(__dirname, 'desktop')));
 app.use('/img', express.static(path.join(__dirname, 'img')));
+
+// Public API Data Route for Customer Portal
+app.get('/api/data', (req, res) => {
+    try {
+        const users = db.prepare('SELECT username, name, role FROM users').all();
+        const patients = db.prepare('SELECT * FROM patients').all();
+        const appointments = db.prepare('SELECT * FROM appointments').all();
+        const settings = db.prepare('SELECT * FROM settings').all();
+        const availability = db.prepare('SELECT * FROM availability').all();
+        const notifications = db.prepare('SELECT * FROM notifications').all();
+
+        res.json({
+            users,
+            patients,
+            appointments,
+            settings: settings.reduce((acc, curr) => {
+                try {
+                    acc[curr.key] = JSON.parse(curr.value);
+                } catch(e) {
+                    acc[curr.key] = curr.value;
+                }
+                return acc;
+            }, {}),
+            availability: availability.reduce((acc, curr) => {
+                try {
+                    acc[curr.date] = JSON.parse(curr.slots);
+                } catch(e) {
+                    acc[curr.date] = [];
+                }
+                return acc;
+            }, {}),
+            notifications
+        });
+    } catch(err) {
+        console.error("Public API data fetch error:", err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 // Auth Routes
 app.post('/api/login', (req, res) => {
@@ -107,23 +162,59 @@ app.get('/api/appointments', authenticateToken, (req, res) => {
 
 // Outros dados (Settings, Availability, etc.)
 app.get('/api/initial-data', authenticateToken, (req, res) => {
-    const settings = db.prepare('SELECT * FROM settings').all();
-    const notifications = db.prepare('SELECT * FROM notifications WHERE read = 0 ORDER BY date DESC LIMIT 50').all();
-    
-    res.json({
-        settings: settings.reduce((acc, curr) => ({ ...acc, [curr.key]: JSON.parse(curr.value) }), {}),
-        notifications
-    });
+    try {
+        const settings = db.prepare('SELECT * FROM settings').all();
+        const notifications = db.prepare('SELECT * FROM notifications ORDER BY date DESC LIMIT 100').all();
+        const availability = db.prepare('SELECT * FROM availability').all();
+        const users = db.prepare('SELECT username, name, role FROM users').all();
+        const appointments = db.prepare('SELECT * FROM appointments').all();
+        const patients = db.prepare('SELECT id, name, cpf, phone, gender FROM patients').all();
+        
+        res.json({
+            settings: settings.reduce((acc, curr) => {
+                try {
+                    acc[curr.key] = JSON.parse(curr.value);
+                } catch(e) {
+                    acc[curr.key] = curr.value;
+                }
+                return acc;
+            }, {}),
+            notifications,
+            availability: availability.reduce((acc, curr) => {
+                try {
+                    acc[curr.date] = JSON.parse(curr.slots);
+                } catch(e) {
+                    acc[curr.date] = [];
+                }
+                return acc;
+            }, {}),
+            users,
+            appointments,
+            patients
+        });
+    } catch(err) {
+        console.error("Error fetching initial data:", err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
-app.post('/api/save', authenticateToken, (req, res) => {
+app.post('/api/save', authenticateTokenOptional, (req, res) => {
     let { store, data } = req.body;
+    
+    // Controles de Acesso Públicos do Portal do Cliente
+    if (!req.user) {
+        if (store !== 'patients' && store !== 'appointments') {
+            return res.status(401).json({ success: false, error: 'Acesso não autorizado' });
+        }
+    }
     
     try {
         if (store === 'patients') {
             const allowed = ['name','cpf','birth','phone','email','gender','cep','address','notes','createdAt','updatedAt'];
             const cols = allowed.filter(k => data[k] !== undefined);
             if (data.id) {
+                // Modificação de paciente requer autenticação
+                if (!req.user) return res.status(401).json({ success: false, error: 'Requer autenticação' });
                 const sets = cols.map(c => `${c} = ?`).join(', ');
                 const vals = cols.map(c => data[c]);
                 db.prepare(`UPDATE patients SET ${sets} WHERE id = ?`).run(...vals, data.id);
@@ -140,15 +231,17 @@ app.post('/api/save', authenticateToken, (req, res) => {
                 io.emit('notification', { id: notifRes.lastInsertRowid, type: 'patient', targetId: data.id, message: notifMsg, date: new Date().toISOString(), read: 0 });
             }
         } else if (store === 'appointments') {
-            const allowed = ['patientId','date','time','procedure','status','notes','createdAt','updatedAt'];
+            const allowed = ['patientId','date','time','procedure','status','notes','createdAt','updatedAt','rescheduleRequest'];
+            // Permite salvar rescheduleRequest
             const cols = allowed.filter(k => data[k] !== undefined);
+            const vals = cols.map(c => c === 'rescheduleRequest' ? JSON.stringify(data[c]) : data[c]);
+            
             if (data.id) {
+                // Permitido para o portal atualizar reagendamento/cancelamento
                 const sets = cols.map(c => `${c} = ?`).join(', ');
-                const vals = cols.map(c => data[c]);
                 db.prepare(`UPDATE appointments SET ${sets} WHERE id = ?`).run(...vals, data.id);
             } else {
                 const placeholders = cols.map(() => '?').join(', ');
-                const vals = cols.map(c => data[c]);
                 const info = db.prepare(`INSERT INTO appointments (${cols.join(', ')}) VALUES (${placeholders})`).run(...vals);
                 data.id = info.lastInsertRowid;
 
@@ -186,7 +279,8 @@ app.post('/api/save', authenticateToken, (req, res) => {
     }
 });
 
-app.post('/api/delete', authenticateToken, (req, res) => {
+app.post('/api/delete', authenticateTokenOptional, (req, res) => {
+    if (!req.user) return res.status(401).json({ success: false, error: 'Acesso não autorizado' });
     const { store, id } = req.body;
     try {
         if (store === 'users') {
@@ -199,6 +293,84 @@ app.post('/api/delete', authenticateToken, (req, res) => {
         res.json({ success: true });
     } catch (err) {
         console.error("Delete error:", err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/notifications/read-all', authenticateToken, (req, res) => {
+    try {
+        db.prepare('UPDATE notifications SET read = 1').run();
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/backup', authenticateToken, (req, res) => {
+    try {
+        const users = db.prepare('SELECT * FROM users').all();
+        const patients = db.prepare('SELECT * FROM patients').all();
+        const appointments = db.prepare('SELECT * FROM appointments').all();
+        const settings = db.prepare('SELECT * FROM settings').all();
+        const availability = db.prepare('SELECT * FROM availability').all();
+        const notifications = db.prepare('SELECT * FROM notifications').all();
+        res.json({ users, patients, appointments, settings, availability, notifications, exportedAt: new Date().toISOString() });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/restore', authenticateToken, (req, res) => {
+    const { patients, appointments, settings, availability } = req.body;
+    try {
+        db.transaction(() => {
+            if (patients) {
+                db.prepare('DELETE FROM patients').run();
+                patients.forEach(p => {
+                    db.prepare('INSERT OR REPLACE INTO patients (id, name, cpf, birth, phone, email, gender, cep, address, notes, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+                        .run(p.id, p.name, p.cpf, p.birth, p.phone, p.email, p.gender, p.cep, p.address, p.notes, p.createdAt, p.updatedAt);
+                });
+            }
+            if (appointments) {
+                db.prepare('DELETE FROM appointments').run();
+                appointments.forEach(a => {
+                    db.prepare('INSERT OR REPLACE INTO appointments (id, patientId, date, time, procedure, status, notes, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?)')
+                        .run(a.id, a.patientId, a.date, a.time, a.procedure, a.status, a.notes, a.createdAt, a.updatedAt);
+                });
+            }
+            if (settings) {
+                db.prepare('DELETE FROM settings').run();
+                settings.forEach(s => {
+                    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(s.key, s.value);
+                });
+            }
+            if (availability) {
+                db.prepare('DELETE FROM availability').run();
+                availability.forEach(a => {
+                    db.prepare('INSERT OR REPLACE INTO availability (date, slots) VALUES (?, ?)').run(a.date, a.slots);
+                });
+            }
+        })();
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/reset', authenticateToken, (req, res) => {
+    try {
+        db.transaction(() => {
+            db.prepare('DELETE FROM patients').run();
+            db.prepare('DELETE FROM appointments').run();
+            db.prepare('DELETE FROM settings').run();
+            db.prepare('DELETE FROM availability').run();
+            db.prepare('DELETE FROM notifications').run();
+            db.prepare('DELETE FROM users WHERE username != ?').run('admin');
+        })();
+        res.json({ success: true, message: 'Sistema zerado com sucesso!' });
+    } catch (err) {
+        console.error(err);
         res.status(500).json({ success: false, error: err.message });
     }
 });

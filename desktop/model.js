@@ -50,6 +50,10 @@ const model = {
     setInitialData(data) {
         this.state.settings = data.settings || {};
         this.state.notifications = data.notifications || [];
+        this.state.availability = data.availability || {};
+        this.state.users = data.users || [];
+        this.state.allAppointments = data.appointments || [];
+        this.state.allPatients = data.patients || [];
     },
 
     sanitizeInput(str) {
